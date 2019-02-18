@@ -16,10 +16,10 @@ import numpy           as np
 import pylab           as plt
 plt.ioff()
 
-from colour.plotting import diagrams   as d
-from   matplotlib    import colors     as cs
-from   tkinter       import filedialog
-from   PIL           import Image
+from   colour.plotting             import diagrams   as d
+from   matplotlib                  import colors     as cs
+from   tkinter                     import filedialog
+from   PIL                         import Image
 
 import PIL.ExifTags
 import matplotlib as mpl
@@ -88,6 +88,31 @@ def find_temp(img):
     except AttributeError : temp = 0
     return temp
 
+def convert_to_XYZ(img):
+    img_data   = np.asarray(img)
+    r,g,b      = [img_data[:,:,i] for i in range(img_data.shape[-1])]
+    isAdobeRGB = is_adobe_rgb(img)
+    if isAdobeRGB : XYZ   = AdobeRGB_to_XYZn(r,g,b)
+    else          : XYZ   = colour.sRGB_to_XYZ( img_data / 255)
+    return XYZ
+
+def linear_AdobeRGB(c):
+    return pow(c, 2.19921875)
+
+def AdobeRGB_to_XYZn(R, G, B):
+    Rlin = linear_AdobeRGB(R / 255.0)
+    Glin = linear_AdobeRGB(G / 255.0)
+    Blin = linear_AdobeRGB(B / 255.0)
+    Xn = Rlin * 0.57667 + Glin * 0.18556 + Blin * 0.18823
+    Yn = Rlin * 0.29734 + Glin * 0.62736 + Blin * 0.07529
+    Zn = Rlin * 0.02703 + Glin * 0.07069 + Blin * 0.99134
+    return np.dstack([Xn, Yn, Zn])
+
+def is_adobe_rgb(image):
+    info = image.info.get('icc_profile', '')
+    return 'Adobe RGB' in str(info)
+
+
 #Colorize the histogram roughly like the visible spectra
 def colorize_hist(hist):
     N,bins,patches = hist
@@ -112,8 +137,7 @@ if __name__ == '__main__':
   #Open a file dialog to select the image, then load it
   image_path = get_file_path()
   img        = Image.open(image_path)
-
-
+ 
   #Attempt to find the color temp of the image and move it from the default
   temp = find_temp(img)
   if temp:
@@ -123,11 +147,11 @@ if __name__ == '__main__':
   #Resize the image to something more workable
   r,c   = img.size
   img   = img.resize(map(int,[r*scale,c*scale]))
-  RGB   = np.asarray(img)
+  #RGB   = np.asarray(img)
 
 
   #Convert to XYZ->xyY colorspace
-  XYZ  = colour.sRGB_to_XYZ(RGB / 255)
+  XYZ  = convert_to_XYZ(img) #colour.sRGB_to_XYZ(RGB / 255)
   xy   = colour.XYZ_to_xy(XYZ)
   xy_n = colour.CCT_to_xy(Temperature)
 
